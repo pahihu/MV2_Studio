@@ -1,0 +1,527 @@
+Saved by %RS from [MGR,CAISSYS] on 15 Feb 2023 at 06:32:00 AM
+20230214 [MGR] ver. 2.0.2
+%CaIPS
+%CaIPS ;CaIS IP Super Server via inetd (C) 2017 'CaIS-System' [ 12/08/2017 17:18 PM ]
+     ;============================================================================
+     ; MUMPS V2/V1R2/V1/RSM  , TCP/IP Super Server
+     ;----------------------------------------------------------------------------
+     ; %CaIPS  =  Server Session Loop
+     ;============================================================================
+     S $ET="D %ET^%CaIPS",^CaIP($H)=$D_"^"_$I_"^"_$P
+     S OK=0,%TO=10,%TOC=0
+READ ;--- Read a TCP/IP pipe (timeout!)
+     K D S %RD=1 S D=1 U 0:("TERMINATOR="_$C(10))
+RD   R %RD(1):%TO
+     ;S %KEY=$KEY S ^TTT("READ",$J,$H)=$A(%KEY)_"|"_$A($E(%KEY,1))_"|"_$A($E(%KEY,2))_"|"_$A($E(%KEY,3))_"|"_$D_"|"_$I_"|"_$P_"|"
+     ;I %KEY=$C(255) S ^TTT("HALT",$J)=$A(%KEY)_"|"_$D_"|" H
+     S T=$T,DEVICE=$D S:T %TOC=%TOC+1
+     ;--- Log communications
+     S N=$G(^CaIP) I N F %=1:1 Q:'$D(%RD(%))  S ^CaIP(%+N)=%RD(%)_"|"_$G(DEVICE)_"|"_$J_"|"_$G(T)_"|"_$G(%TOC)_"|"
+     I N S ^CaIP=N+%
+     ;--- If Peer connected lost (%RTC>1000)&(time<20mp)
+     G:(($G(%TOC)*1)>1000) HP
+     ;--- If IPframe empty go READ
+     G:$G(%RD(1))="" READ
+     ;Network hardening Error handling
+     G:$P(DEVICE,",",3)="" HP     ;if TCP/IP lost
+     ;--- If IPframe empty go READ
+     G:$G(%RD(1))="" READ
+     S MSG=$G(%RD(1))
+MSG  ;Message Decoder
+     S MSG=$G(MSG),MSG=$TR(MSG,$C(10,13),"")
+     S %TOC=0   ;Message<>"" Reset %RTC
+     S %com="",%com=$P(MSG,"|",1),%MSGS="?" ;command
+     ;Checking client UTF support
+     s %devid=$P($P($D,",",3)," ",1) S:%devid="" %devid=" " ;Null subscript !
+     S UTF=$G(^CaIS("%LOG",%devid,"UTF"))     ;Encoding setting by TCP/IP : CaIS2.1->CaIS4.8 client
+     S JUTF=$G(^CaIS("%JOB_LOG",$J,"UTF"))    ;Encoding setting by $J : CaIS4.9-> ,MV2_Studio(Lazarus_Project)
+     S:JUTF'="" UTF=JUTF
+     S:UTF="" UTF=1                 ;Default No conversion Server=Client encoding
+     S:UTF=0 MSG=$$^CPUTF(MSG,"")   ;Convert ISO (Windows client)=>UTF8/Database
+     S:UTF=2 MSG=$$^CPUTF(MSG,"C")  ;Convert UTF8(Unix client)=>Convert ISO/Database
+     ;Load parameters
+     F i=2:1:16 S v="%p"_i,@v=$P(MSG,"|",i)
+     ;=== CONNECT
+     I %com="CONNECT" S %MID=$J,^CaIP("MID",%MID)=$H_"|"_$D_"|"_$P($G(MSG),"|",2,999) K ^CM(%MID) S %MSGS="MID="_$G(%MID) G MSG1
+     ;=== DISCONNECT
+     I %com="DISCONNECT" K ^CaIP("MID",$G(%p2)),^CaIS("%JOB_LOG",$J),^%CM($G(%p2)) S %MSGS="KILL %MID="_$G(%p2) G MSG1
+     ;=== GET
+     I %com="GET" S %p2=$G(%p2),ret=$G(@%p2),%MSGS=%p2_"="_ret G MSG1
+     ;=== SET
+     I %com="SET" S %p2=$G(%p2),%p3=$G(%p3),%MSGS="NULL" S:%p2'="" @%p2=%p3,%MSGS="OK" G MSG1
+     ;=== EXEC
+     I %com="EXEC" S %p2=$G(%p2),%MSGS="NULL" I %p2'="" X %p2 S %MSGS="OK" G MSG1
+     ;=== CONINFO
+     I %com="CONINFO"  D
+     .S ms="",%MSGS="" I $G(%p2)=""  D
+     ..S N="" F  S N=$O(^CaIP("MID",N)) Q:N=""  S %MSGS=%MSGS_","_N
+     ..S %MSGS=$P(%MSGS,",",2,999),%MSGS="MIDs:"_%MSGS
+     .I $G(%p2)'=""  D
+     ..S ms="NOT CONNECTED",p=$G(^CaIP("MID",$G(%p2))),pp=$P(p,"|",2,999),p=$P(p,"|",1)
+     ..I p'="" S %T=$P(p,",",2) D ^%T S ms=$$^%ZD($P(p,",",1),2)_"["_$G(%T)_"] "_$G(pp)
+     ..S %MSGS="MID("_$G(%p2)_")="_$G(ms)
+     ;=== DO
+     I %com="DO"  D
+     .S %mid=$G(%p2,$J),mm=$G(^CaIP("MID",%mid)) S:mm="" mm=$G(^CaIP("MID",$J))
+     .S %MSGS="MISSING (MID) CONNECT" Q:mm=""
+     .S %p3=$G(%p3) S:%p3="" %p3="MGR"
+     .K CM M CM=^%CM(%mid) S %p4=$G(%p4),%MSGS="NULL" Q:%p4=""
+     .D:%p3'="MGR" CD^%U(%p3) D @%p4 M ^%CM(%mid)=CM S %MSGS="OK"
+     ;=== CALL
+     I %com="CALL"  D
+     .S %mid=$G(%p2,$J),mm=$G(^CaIP("MID",%mid)) S:mm="" mm=$G(^CaIP("MID",$J))
+     .S %MSGS="MISSING (MID) CONNECT" Q:mm=""
+     .S %p3=$G(%p3) S:%p3="" %p3="MGR"
+     .K CM M CM=^%CM(%mid) S %p4=$G(%p4),%MSGS="NULL" Q:%p4=""
+     .I $E(%p4,1)'="$" S %MSGS="BAD FUNCTION SYNTAX '$'?" Q
+     .D:%p3'="MGR" CD^%U(%p3)
+     .S @("%MSGS="_%p4)
+     .D:%p3'="MGR" CD^%U("MGR")
+     .M ^%CM(%mid)=CM
+MSG1 ;=== Invalid Opt.
+     I %MSGS="?" S %MSGS=MSG_" Invalid MUMPS V1  SuperServer options !"
+     ;Send answer to Client
+     D SEND
+     ;If DISCONNECT halt background service job
+     H:%com="DISCONNECT"
+     G READ
+SEND ; %MSGS -> TCP/IP answer + Cr +Lf
+     ;Checking client UTF support :
+     s %devid=$P($P($D,",",3)," ",1) S:%devid="" %devid=" " ;Null subscript !
+     S UTF=$G(^CaIS("%LOG",%devid,"UTF"))     ;Encoding setting by TCP/IP : CaI$
+     S JUTF=$G(^CaIS("%JOB_LOG",$J,"UTF"))    ;Encoding setting by $J :_CaIS4.9$
+     S:JUTF'="" UTF=JUTF
+     S:UTF="" UTF=1                      ;Default No conversion Server=Client encodi$
+     S:UTF=0 %MSGS=$$^CPUTF(%MSGS,"C")   ;Convert ISO (Windows client)=>UTF8/Database
+     S:UTF=2 %MSGS=$$^CPUTF(%MSGS,"")    ;Convert UTF8(Unix client)=>Convert ISO/Dat$
+     W "<"_$G(%MSGS)_">"_$C(13,10)
+     S N=$G(^CaIP) I N S ^CaIP(N,"SEND")="<"_$G(%MSGS)_">"_"|"_$G(DEVICE)_"|"_$J_"|"_$G(T)_"|"
+     Q
+%ET  S ^CaIP("ERR",$J,$H)=$EC
+     S %mcode=^$J($J,"$STACK",^$J($J,"$STACK")-1,"MCODE")
+     S (FF,F)=$P($EC,",",2),F="MUMPS Error: "_F_" "_$&%ERRMSG(F)
+     S ^CaIP("ERR",$J,$H)=$G(F)
+     S ^CaIP("ERR",$J,$H,"MCODE")=%mcode
+     ;---------------------------------------------------------
+     ;READ error handling if physical remote-network is ENABLE
+     ; ->[Z47] =IO: No peer connected
+     ; ->[Z304]=Connection reset by peer
+     ;OPEN error handling if physical remote-network is DISABLE
+     ; ->[Z313]=No route to host
+     ;---------------------------------------------------------
+HP   ;Halting SuperServer background process
+     K ^CaIP("MID",$J),^%CM($J) H
+
+%CaIPSRV
+%CaIPSRV ;CaIS IP Super Server (C) 2011-2013 'CaIS-System' [ 05/17/2016 22:05 PM ]
+     ;============================================================================
+     ; MUMPS V2/V1R2/V1/RSM  , TCP/IP Super Server
+     ;----------------------------------------------------------------------------
+     ; %CaIPSRV = Server Session Loop
+     ; Loading Super Server parameters :
+     ;       IP = localhost
+     ;     port = ^UTILITY("MSIP","PORT") default=1972
+     ;  session = ^UTILITY("MSIP","SESSION") default=5 max.concurent session
+     ;  %TOC = TimeOutCounter of TCP socket
+     ;============================================================================
+     S port=$G(^UTILITY("MSIP","PORT"),1972),sess=$G(^UTILITY("MSIP","SESSION"),5)
+     S $ET="D %ET^%CaIPSRV" H 1
+     ;--- Test Open TCP/IP channel
+     S OK=0,%TO=10,%TOC=0
+     F ii=1:1:25  D
+     .Q:OK=1  O 10:(port:"S="_sess):%TO S OK=$T
+     I OK=0 S ^CaIP("OFF")=1,^CaIP("STA")=-1 H
+     ;Save Master SERVER process
+     S MJN=$G(^UTILITY("SYS_SAFE","IPSRV")) S:MJN="" ^UTILITY("SYS_SAFE","IPSRV")=$J
+READ ;--- Read a TCP/IP pipe (timeout!)
+     K D S %RD=1 S D=1 U 10:("TERMINATOR="_$C(10))
+RD   S ^CaIP("STA")=1
+     R %RD(1):%TO S T=$T,DEVICE=$D S:T %TOC=%TOC+1
+      ;--- Log communications
+     S N=$G(^CaIP) I N F %=1:1 Q:'$D(%RD(%))  S ^CaIP(%+N)=%RD(%)_"|"_$G(DEVICE)_"|"_$J_"|"_$G(T)_"|"_$G(%TOC)_"|"
+     I N S ^CaIP=N+%
+     ;--- If Peer connected lost (%RTC>1000)&(time<20mp)
+     G:(($G(%TOC)*1)>1000) HP
+     ;--- If IPframe empty go READ
+     G:$G(%RD(1))="" READ
+     ;Max. session checking If $J=MasterSERVER
+     I ($G(^CaIP("MJN"))=$J) W "No ports available",! H 1 U 10:("DISCONNECT") G READ
+     ;--- Check IP Server OFF
+     I $G(^CaIP("OFF"))=1 C 10 H
+     ;Network hardening Error handling
+     G:$P(DEVICE,",",3)="" HP     ;if TCP/IP lost
+     ;Remote Network NetBIOS(port=139) not responding
+     S %NB=$G(^CaIP("NetBIOS"),0)*1 ;Set switch ^CaIP3
+     I ('T)&(%NB=1)  D
+     .S ACK=0,IP=$P($P(DEVICE,",",3)," ",1) Q:(IP="127.0.0.1")!(IP="")!(IP=port)
+     .C 11 O 11:(IP_" 139":"TCPIP"):%TO I  S ACK=1 C 11
+     .I 'ACK K ^CaIP("MID",$J),^%CM($J)
+     .H:'ACK
+     .S $ET="D %ET^%CaIPSRV" C 11
+     ;--- If IPframe empty go READ
+     G:$G(%RD(1))="" READ
+     S MSG=$G(%RD(1))
+MSG  ;Message Decoder
+     S MSG=$G(MSG),MSG=$TR(MSG,$C(10,13),"")
+     S %TOC=0   ;Message<>"" Reset %RTC
+     S %com="",%com=$P(MSG,"|",1),%MSGS="?" ;command
+     ;Checking client UTF support
+     s %devid=$P($P($D,",",3)," ",1) S:%devid="" %devid=" " ;Null subscript !
+     S UTF=$G(^CaIS("%LOG",%devid,"UTF"))     ;Encoding setting by TCP/IP : CaIS2.1->CaIS4.8 client
+     S JUTF=$G(^CaIS("%JOB_LOG",$J,"UTF"))    ;Encoding setting by $J : CaIS4.9-> ,MV2_Studio(Lazarus_Project)
+     S:JUTF'="" UTF=JUTF
+     S:UTF="" UTF=1                 ;Default No conversion Server=Client encoding
+     S:UTF=0 MSG=$$^CPUTF(MSG,"")   ;Convert ISO (Windows client)=>UTF8/Database
+     S:UTF=2 MSG=$$^CPUTF(MSG,"C")  ;Convert UTF8(Unix client)=>Convert ISO/Database
+     ;Load parameters
+     F i=2:1:16 S v="%p"_i,@v=$P(MSG,"|",i)
+     ;=== CONNECT
+     I %com="CONNECT" S %MID=$J,^CaIP("MID",%MID)=$H_"|"_$D_"|"_$P($G(MSG),"|",2,999) K ^CM(%MID) S %MSGS="MID="_$G(%MID) G MSG1
+     ;=== DISCONNECT
+     I %com="DISCONNECT" K ^CaIP("MID",$G(%p2)),^CaIS("%JOB_LOG",$J),^%CM($G(%p2)) S %MSGS="KILL %MID="_$G(%p2) G MSG1
+     ;=== GET
+     I %com="GET" S %p2=$G(%p2),ret=$G(@%p2),%MSGS=%p2_"="_ret G MSG1
+     ;=== SET
+     I %com="SET" S %p2=$G(%p2),%p3=$G(%p3),%MSGS="NULL" S:%p2'="" @%p2=%p3,%MSGS="OK" G MSG1
+     ;=== EXEC
+     I %com="EXEC" S %p2=$G(%p2),%MSGS="NULL" I %p2'="" X %p2 S %MSGS="OK" G MSG1
+     ;=== CONINFO
+     I %com="CONINFO"  D
+     .S ms="",%MSGS="" I $G(%p2)=""  D
+     ..S N="" F  S N=$O(^CaIP("MID",N)) Q:N=""  S %MSGS=%MSGS_","_N
+     ..S %MSGS=$P(%MSGS,",",2,999),%MSGS="MIDs:"_%MSGS
+     .I $G(%p2)'=""  D
+     ..S ms="NOT CONNECTED",p=$G(^CaIP("MID",$G(%p2))),pp=$P(p,"|",2,999),p=$P(p,"|",1)
+     ..I p'="" S %T=$P(p,",",2) D ^%T S ms=$$^%ZD($P(p,",",1),2)_"["_$G(%T)_"] "_$G(pp)
+     ..S %MSGS="MID("_$G(%p2)_")="_$G(ms)
+     ;=== DO
+     I %com="DO"  D
+     .S %mid=$G(%p2,$J),mm=$G(^CaIP("MID",%mid)) S:mm="" mm=$G(^CaIP("MID",$J))
+     .S %MSGS="MISSING (MID) CONNECT" Q:mm=""
+     .S %p3=$G(%p3) S:%p3="" %p3="MGR"
+     .K CM M CM=^%CM(%mid) S %p4=$G(%p4),%MSGS="NULL" Q:%p4=""
+     .D:%p3'="MGR" CD^%U(%p3) D @%p4 M ^%CM(%mid)=CM S %MSGS="OK"
+     ;=== CALL
+     I %com="CALL"  D
+     .S %mid=$G(%p2,$J),mm=$G(^CaIP("MID",%mid)) S:mm="" mm=$G(^CaIP("MID",$J))
+     .S %MSGS="MISSING (MID) CONNECT" Q:mm=""
+     .S %p3=$G(%p3) S:%p3="" %p3="MGR"
+     .K CM M CM=^%CM(%mid) S %p4=$G(%p4),%MSGS="NULL" Q:%p4=""
+     .I $E(%p4,1)'="$" S %MSGS="BAD FUNCTION SYNTAX '$'?" Q
+     .D:%p3'="MGR" CD^%U(%p3)
+     .S @("%MSGS="_%p4)
+     .D:%p3'="MGR" CD^%U("MGR")
+     .M ^%CM(%mid)=CM
+MSG1 ;=== Invalid Opt.
+     I %MSGS="?" S %MSGS=MSG_" Invalid MUMPS V1  SuperServer options !"
+     ;Send answer to Client
+     D SEND
+     ;If DISCONNECT halt background service job
+     I %com="DISCONNECT"  U 10:("DISCONNECT") C 10
+     H:%com="DISCONNECT"
+     G READ
+SEND ; %MSGS -> TCP/IP answer + Cr +Lf
+     ;Checking client UTF support
+     s %devid=$P($P($D,",",3)," ",1) S:%devid="" %devid=" " ;Null subscript !
+     S UTF=$G(^CaIS("%LOG",%devid,"UTF"))     ;Encoding setting by TCP/IP : CaI$
+     S JUTF=$G(^CaIS("%JOB_LOG",$J,"UTF"))    ;Encoding setting by $J : CaIS4.9$
+     S:JUTF'="" UTF=JUTF
+     S:UTF="" UTF=1                      ;Default No conversion Server=Client encodi$
+     S:UTF=0 %MSGS=$$^CPUTF(%MSGS,"C")   ;Convert ISO (Windows client)=>UTF8/Database
+     S:UTF=2 %MSGS=$$^CPUTF(%MSGS,"")    ;Convert UTF8(Unix client)=>Convert ISO/Dat$
+     U 10 W "<"_$G(%MSGS)_">"_$C(13,10)
+     S N=$G(^CaIP) I N S ^CaIP(N,"SEND")="<"_$G(%MSGS)_">"_"|"_$G(DEVICE)_"|"_$J_"|"_$G(T)_"|"
+     Q
+%ET  S ^CaIP("ERR",$J,$H)=$EC
+     S %mcode=^$J($J,"$STACK",^$J($J,"$STACK")-1,"MCODE")
+     S (FF,F)=$P($EC,",",2),F="MUMPS Error: "_F_" "_$&%ERRMSG(F)
+     S ^CaIP("ERR",$J,$H)=$G(F)
+     S ^CaIP("ERR",$J,$H,"MCODE")=%mcode
+     ;---------------------------------------------------------
+     ;READ error handling if physical remote-network is ENABLE
+     ; ->[Z47] =IO: No peer connected
+     ; ->[Z304]=Connection reset by peer
+     ;OPEN error handling if physical remote-network is DISABLE
+     ; ->[Z313]=No route to host
+     ;---------------------------------------------------------
+HP   ;Halting SuperServer background process
+     C 10 K ^CaIP("MID",$J),^%CM($J) H
+
+%CaIPkj
+%CaIPkj ;Services for %CaIPSRV [ 08/25/2015 23:53 PM ]
+    ;
+    Q
+LOF ;Log clear & OFF
+    K ^caip
+    M ^caip("MID")=^CaIP("MID")
+    M ^caip("MJN")=^CaIP("MJN")
+    M ^caip("STA")=^CaIP("STA")
+    K ^CaIP
+    M ^CaIP=^caip
+    S ^CaIP=0
+    ;F I=1:1:10000000 K ^CaIP(I)
+    Q
+
+%MStudio
+%MStudio ;MV2-Studio(Lazarus-project) MUMPS side_Calls
+         ;================================================
+         ; Support MV2 multi-DBvolume ["UCI","VOL"] format
+         ;================================================
+         Q
+DBQ(par) ;Database list Query from MV2-environment
+         ;----------------------------------------
+         N (par) S par=$G(par),ix=0,BL="",$E(BL,80)=" ",SY=$P($P($SY,",",2)," ",1,2) Q:par="V" SY
+         K ^MTEMP($J) S XX="S ix=ix+1,^MTEMP($J,ix)=P"
+         S VOL="" F  S VOL=$O(^$S("VOL",VOL)) Q:VOL=""  S P=$G(^$S("VOL",VOL,"NAME")) X XX
+         Q ix
+UCIQ(db) ;UCI list of selected DatabaseVolume
+         ;-----------------------------------
+         N (db)
+         ;Looking VOLnr of db_name ...
+         S (VOL,vol)="" F  S vol=$O(^$S("VOL",vol)) Q:vol=""  S P=$G(^$S("VOL",vol,"NAME")) S:P=db VOL=vol
+         S VOL=VOL*1,ix=0,$E(BL,80)=" " K ^MTEMP($J) S XX="S ix=ix+1,^MTEMP($J,ix)=P"
+         S UCI=0 Q:VOL'>0 "ERR"
+         S X=0 F  S X=$O(^$S("VOL",VOL,"UCI",X)) Q:X<1  S UCI=X,P=^$S("VOL",VOL,"UCI",X) X XX
+         Q ix
+RTNQ(ucidb) ;Routines list of selected DatabaseUCI
+         ;--------------------------------------
+         N (ucidb) S ucidb=$TR(ucidb,$C(126),$C(34))
+         S ix=0,BL="",$E(BL,80)=" " K ^MTEMP($J) S XX="S ix=ix+1,^MTEMP($J,ix)=P"
+         S %ref="S rtn=$O(^"_ucidb_"$R(rtn))"
+         S rtn="" F  X %ref Q:rtn=""  D
+         .S FLRef="S FL=$G(^"_ucidb_"$R(rtn,1))"
+         .X FLRef S P=$E(rtn_BL,1,15)_" | "_FL X XX
+         Q ix
+LRL(ucidb,rtn,ln) ;Load ONE sourceCode-line of Routine
+         ; OR result last Nr. of sourceCode
+         ;------------------------------------------
+         N (ucidb,rtn,ln) S ucidb=$TR(ucidb,$C(126),$C(34))
+         S rtn=$G(rtn),ln=$G(ln)*1 S:rtn="" rtn="?"
+         S MxLine="S Mx=$O(^"_ucidb_"$R(rtn,"_$C(34,34)_"),-1)"
+         S Line="S Ln=$G(^"_ucidb_"$R(rtn,ln))"
+         I ln="-1" X MxLine
+         Q:ln="-1" Mx
+         Q:ln=0 "Pseudo code !"
+         I ln>0 X Line
+         Q:ln>0 Ln
+SENC(enc) ;Set ENCoding to %CaIPSRV/%CaIPS
+         ;--------------------------------
+         S enc=$G(enc) S:enc="" enc=1  ;Default No encoding
+         S ^CaIS("%JOB_LOG",$J,"UTF")=enc
+         Q "OK"
+SAVE(mode,ucidb,rtn,seq,srctx) ;SAVE Routine line ...
+         ;--------------------------------------
+         N (mode,ucidb,rtn,seq,srctx) S ucidb=$TR(ucidb,$C(126),$C(34)),dd=$C(34)
+         S XX="K ^"_ucidb_"UTILITY("_dd_"$R"_dd_","_dd_rtn_dd_")"
+         I seq=1 X XX D:mode="+" TS
+         S srctx=$TR(srctx,$C(96,127),$C(34)_"|")
+         S gbref="^"_ucidb_"UTILITY("_dd_"$R"_dd_","_dd_rtn_dd_","_seq_")"
+         S @gbref=srctx
+         Q "OK"
+SYNCH(ucidb,rtn) ;--- Check MUMPS syntax of Routine
+         ;-----------------------------------------
+         N (ucidb,rtn) S ucidb=$TR(ucidb,$C(126),$C(34)),dd=$C(34)
+         ;Switch to target UCI
+         S ucidbref=$TR(ucidb,"[]"_dd,""),XX="D CD^%U("_dd_ucidbref_dd_")" X XX
+         ;Version Checking : MV2023.01 or above=String_result , older=I/O to file..
+         S SY=$P($P($SY,",",2)," ",2),SYnumber=$TR(SY,"V","")  ;Get Verison number(Numeric)
+         S errors="OK"                                         ;Default:No errors =OK
+         I SYnumber>"2023.00"  D
+         .S %ret=$&%ROUCHK(rtn)           ;Run Routine Syntax Check , return String
+         .;Back to MGR UCI
+         .S mgrref="MGR,"_$P(ucidbref,",",2),XX="D CD^%U("_dd_mgrref_dd_")" X XX
+         .I %ret'=""  D
+         ..K ^MTEMP($J) S SEQ=0,D=$C(10)
+         ..F  S LN=$P(%ret,D,SEQ+1) Q:LN=""  S SEQ=SEQ+1,^MTEMP($J,SEQ)=$TR(LN,$C(13),"")
+         ..S errors="ERR:"_SEQ
+         I SYnumber<"2023.01"  D
+         .;Standard I/O to file
+         .S TempFile="%MStudio-"_$J_".RCH"
+         .C 5 O 5:(TempFile:"W") C 5      ;Delete It
+         .O 5:(TempFile:"W") U 5          ;I/O to temp file
+         .S %ret=$&%ROUCHK(rtn)           ;Run Routine Syntax Check to I/O channel
+         .C 5                             ;Close temp file , restore I/O
+         .;Back to MGR UCI
+         .S mgrref="MGR,"_$P(ucidbref,",",2),XX="D CD^%U("_dd_mgrref_dd_")" X XX
+         .;Check temp File length >0 then ERROR's list !
+         .S TFExist=$&%FILE(TempFile,"EXISTS")
+         .S TFSize=$S(TFExist=1:$&%FILE(TempFile,"SIZE"),1:0)
+         .I TFSize>0   D
+         ..K ^MTEMP($J) C 5 O 5:(TempFile:"R") S SEQ=0,K=0 F  Q:K=255  D
+         ...U 5:"TERMINATOR="_$C(10) R LN S K=$A($K),SEQ=SEQ+1,^MTEMP($J,SEQ)=LN
+         ..C 5 S errors="ERR:"_SEQ                        ;ERRORS Result: ERR:Nr_of_ErrorLine
+         Q errors
+TS       ;--- Make TimeStamp of Routine MODE='+'
+         ;--------------------------------------
+         S TM=$$^%ZT($P($H,",",2),1),%TS="[ "_$$^%ZD(+$H)_" "_$P(TM,":",1,2)_" "_$P(TM," ",2)_" ]"
+         S pos=$F(srctx," ;")
+         I pos S p31=$E(srctx,1,pos-1),p32=$P($E(srctx,pos,9999),"[",1),srctx=p31_p32
+         S:$E(srctx,$L(srctx))=" " srctx=$E(srctx,1,$L(srctx)-1)
+         S srctx=$S(pos:srctx_" "_%TS,1:srctx_" ; "_%TS)
+         Q
+COMP(ucidb,rtn) ;--- Compile Routine
+         ;--------------------------
+         N (ucidb,rtn) S ucidb=$TR(ucidb,$C(126),$C(34)),dd=$C(34)
+         S XX="M ^"_ucidb_"$R("_dd_rtn_dd_")=^"_ucidb_"UTILITY("_dd_"$R"_dd_","_dd_rtn_dd_")" X XX
+         Q "OK"
+         ;===============================================
+MTI(ix)  ;Result ^MTEMP(Job,ix) record
+         Q $G(^MTEMP($J,ix))
+
+%ZD
+%ZD(%DN,%mode) ;Convert %DN to printable date as %mode [ 07/12/2013 12:15 PM ]
+               ;2011 (C) 'CaIS-System'
+               ;======================================
+               N (%DN,%mode)
+               S (%DN,%ODN)=$G(%DN),%mode=$G(%mode,1),%ret=""
+               S:%DN>21608 %DN=%DN+1 S M=1,Y=%DN\1461*4+1841,%DN=%DN#1461
+               S:'%DN %DN=1461,Y=Y-4 F %=1:1:3 Q:%DN<366  S Y=Y+1,%DN=%DN-365
+               F %=31,28+(Y#4=0),31,30,31,30,31,31,30,31,30,31 Q:%DN'>%  S M=M+1,%DN=%DN-%
+               I $F("25679",%mode) S M=$P("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",",",M)
+               S DAY=$TR($J(%DN,2)," ",0) S:$L(M)=1 M=$TR($J(M,2)," ","0")
+               ;-------------------------------------------------
+               ; version : %mode same as InterSystem CACHE $ZD()
+               ;-------------------------------------------------
+               S:%mode=1 %ret=M_"/"_DAY_"/"_Y
+               S:%mode=2 %ret=DAY_" "_M_" "_Y
+               S:%mode=3 %ret=Y_"-"_M_"-"_DAY
+               S:%mode=4 %ret=DAY_"/"_M_"/"_Y
+               S:%mode=5 %ret=M_" "_%DN_", "_Y
+               S:%mode=6 %ret=M_" "_%DN_" "_Y
+               S:%mode=7 %ret=M_" "_DAY_" "_Y
+               S:%mode=8 %ret=Y_M_DAY
+               ;10 - East Europe format yyyy.mm.dd
+               S:%mode=10 %ret=Y_"."_M_"."_DAY
+               ;11 - day nr. of Week
+               I %mode=11 S fwd=$G(^%ZDweeks("CAL_FW",Y)) S %ret=(%ODN-fwd)#7+1 S:%ret=0 %ret=7
+               Q %ret
+Weeks          ;Define %ZDweeks global nodes
+               W !,"Defined year:" R YEAR Q:YEAR=""
+               W !,"First monday (yyyymmdd):" R DTS
+               S DTN=$$^%ZDH(DTS),^%ZDweeks("CAL_FW",YEAR)=DTN G Weeks
+
+%ZT
+%ZT(%TN,%mode) ;Internal time to External [ 05/17/2016 15:23 PM ]
+   N (%TN,%mode)
+   S %TN=$G(%TN),%mode=$G(%mode,4)
+   S:$D(%TN)#2=0 %TN=$P($H,",",2)
+   I %TN<0!(%TN>86399) Q ""
+   I '%TN Q "00:00"
+   S S=%TN#60,H=%TN\60,M=H#60,H=H\60
+   S %=$S(H<12:"AM",M!S:"PM",1:"M ")
+   ;-------------------------------------------------
+   ; version : %mode same as InterSystem CACHE $ZT()
+   ;-------------------------------------------------
+   S:%mode=1 %ret=$TR($J(H,2)," ",0)_":"_$TR($J(M,2)," ",0)_":"_$TR($J(S,2)," ",0)_" "_%
+   S:%mode=2 %ret=$TR($J(H,2)," ",0)_":"_$TR($J(M,2)," ",0)
+   S:%mode=3 %ret=$TR($J(H,2)," ",0)_":"_$TR($J(M,2)," ",0)_" "_%
+   S:%mode=4 %ret=$TR($J(H,2)," ",0)_":"_$TR($J(M,2)," ",0)_":"_$TR($J(S,2)," ",0)
+   Q %ret
+
+CPUTF
+CPUTF(%P,%PP) ;--- Code Page Conversion [ 07/15/2014 21:58 PM ]
+         ;=====================================================================
+         ;--- %P   = String
+         ;--- %PP  = mode
+         ;--- Ret. = if mode "" = convert from ISO to UTF-8
+         ;---                "L"= length of Stirng as UTF-8
+         ;---                "C"= convert from UTF-8 to ISO
+         ;---                "A"= convert from UTF-8 to ASCII(english char.)
+         ;---                "D"= convert from DOS852 to UTF-8
+         ;---               "XD"= convert from UTF-8 to DOS852
+         ;--- D MAKE^CPUTF      = make ^CPUTF globals for convert.
+         ;====================================================================
+         N (%P,%PP) S TXT1=$G(%P),TXT2=""
+         G:$G(%PP)="L" L
+         G:$G(%PP)="C" C2
+         G:$G(%PP)="A" C3
+         G:$G(%PP)="D" C4
+         G:$G(%PP)="XD" C5
+         G:$G(%PP)="BL" BL
+         G C1
+         ;====================================================================
+MAKE     ;--- Make ^CPUTF conversion global
+         K ^CPUTF
+         ;ISO/UTF-8
+         S ENC="193:195,129#201:195,137#205:195,141#211:195,147#214:195,150#213:197,144#"
+         S ENC=ENC_"218:195,154#220:195,156#219:197,176#212:195,148#225:195,161#233:195,169#"
+         S ENC=ENC_"237:195,173#243:195,179#246:195,182#245:197,145#250:195,186#252:195,188#"
+         S ENC=ENC_"251:197,177#244:195,180#244:195,181#" ;-- 22 tag HUN
+         S ENC=ENC_"185:196,133#165:196,132#230:196,135#198:196,134#234:196,153#202:196,152#"
+         S ENC=ENC_"179:197,130#163:197,129#241:197,132#209:197,131#156:197,155#140:197,154#"
+         S ENC=ENC_"159:197,186#143:197,185#191:197,188#175:197,187#"  ;-- +16 tag PL
+         S TAG=" ",i=1 F  Q:TAG=""  D
+         .S TAG=$P(ENC,"#",i) Q:TAG=""
+         .S TG1=$P(TAG,":",1),TG2=$P(TAG,":",2),TG21=$P(TG2,",",1),TG22=$P(TG2,",",2)
+         .S ^CPUTF("ISO",TG1)=TG2,^CPUTF("UTF",TG21,TG22)=TG1
+         .S i=i+1
+         ;UTF-8/ASCII
+         S UTF="ÁÉÍÓÖŐÕÚÜÛŰáéíóöőõúüûűĄąĆćĘęŁłŃńŚśŹźŻż"
+         S ANSI="AEIOOOOUUUUaeioooouuuuAaCcEeLlNnSsZzZz"
+         S C=" ",i=1,j=1 F  Q:C=""  D
+         .S C=$E(UTF,i) Q:C=""
+         .S CC=$A(C),i=i+1
+         .I (CC=195)!(CC=197) S CC2=$A($E(UTF,i)),i=i+1
+         .S CCISO=$G(^CPUTF("UTF",CC,CC2))
+         .S CANSI=$A($E(ANSI,j)),j=j+1
+         .Q:CCISO=""
+         .;W !,"UTF("_$C(CC,CC2)_":"_CC_","_CC2_")=ISO("_CCISO_")=ANSI("_CANSI_")="_$C(CANSI)
+         .S ^CPUTF("ANSI",CC,CC2)=CANSI
+         ;UTF-8/DOS852
+         S UTF="áéíóöőúüűÁÉÍÓÖŐÚÜŰ"
+         S DOS852=$G(^DOS)
+         S C=" ",i=1,j=1 F  Q:C=""  D
+         .S C=$E(UTF,i) Q:C=""
+         .S CC=$A(C),i=i+1
+         .I (CC=195)!(CC=197) S CC2=$A($E(UTF,i)),i=i+1
+         .S CCISO=$G(^CPUTF("UTF",CC,CC2))
+         .S CDOS=$A($E(DOS852,j)),j=j+1
+         .Q:$G(CCISO)=""
+         .;W !,"UTF("_$C(CC,CC2)_":"_CC_","_CC2_")=ISO("_CCISO_")=DOS("_CDOS_")="_$C(CDOS)
+         .S ^CPUTF("DOS",CC,CC2)=CDOS,^CPUTF("XDOS",CDOS)=CC_","_CC2
+         ;Non legal Expection's :((
+         S ^CPUTF("XDOS",63)=^CPUTF("XDOS",181)  ;Á
+         S ^CPUTF("XDOS",149)=^CPUTF("XDOS",224) ;Ó
+         S ^CPUTF("XDOS",151)=^CPUTF("XDOS",233) ;Ú
+         Q
+C1       ;--- Convert from ISO to UTF
+         S TXT2="" F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i,i),CX=C,CXU=$G(^CPUTF("ISO",$A(CX)))
+         .S:CXU'="" CXU1=$P(CXU,",",1),CXU2=$P(CXU,",",2),CX=$C(CXU1,CXU2)
+         .S TXT2=TXT2_CX
+         Q TXT2
+L        ; Length of UTF String
+         D C2 Q $L(TXT2)
+C2       ; Convert from UTF String to ISO
+         S TXT2="" F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i),CN=$E(TXT1,i+1),CX=C,CXU="" S:CN'="" CXU=$G(^CPUTF("UTF",$A(C),$A(CN)))
+         .S:CXU'="" CX=$C(CXU),i=i+1
+         .S TXT2=TXT2_CX
+         Q:$G(%PP)="L"
+         Q TXT2
+C3       ; Convert from UTF String to ANSI(English Char.)
+         S TXT2="" F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i),CN=$E(TXT1,i+1),CX=C,CXU="" S:CN'="" CXU=$G(^CPUTF("ANSI",$A(C),$A(CN)))
+         .S:CXU'="" CX=$C(CXU),i=i+1
+         .S TXT2=TXT2_CX
+         Q TXT2
+C4       ;--- Convert from DOS852 to UTF
+         S TXT2="" F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i,i),CX=C,CXU=$G(^CPUTF("XDOS",$A(CX)))
+         .S:CXU'="" CXU1=$P(CXU,",",1),CXU2=$P(CXU,",",2),CX=$C(CXU1,CXU2)
+         .S TXT2=TXT2_CX
+         Q TXT2
+C5       ; Convert from UTF String to DOS852
+         S TXT2="" F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i),CN=$E(TXT1,i+1),CX=C,CXU="" S:CN'="" CXU=$G(^CPUTF("DOS",$A(C),$A(CN)))
+         .S:CXU'="" CX=$C(CXU),i=i+1
+         .S TXT2=TXT2_CX
+         Q TXT2
+BL       ; Count UTF double byte char , Return conted BLank space
+         S %ret=0 F i=1:1:$L(TXT1)  D
+         .S C=$E(TXT1,i),CN=$E(TXT1,i+1),CX=C,CXU="" S:CN'="" CXU=$G(^CPUTF("UTF",$A(C),$A(CN)))
+         .S:CXU'="" %ret=%ret+1
+         S %retB="",$E(%retB,132)=" "
+         Q $E(%retB,1,%ret)
+
+

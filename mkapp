@@ -1,0 +1,15 @@
+bundle=MV2_Studio
+app=$bundle.app
+toc=$app/Contents
+res=$toc/Resources
+
+strip -x -S $bundle
+upx $bundle
+
+cp Info.plist $toc
+cp $bundle.icns $res
+cp MStudio.RTN $res
+
+rm -rf $HOME/Applications/$app
+cp -rp $app $HOME/Applications
+touch $HOME/Applications/$app
