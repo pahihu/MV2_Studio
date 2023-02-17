@@ -11,12 +11,13 @@
       <UseXPManifest Value="True"/>
       <XPManifest>
         <DpiAware Value="True"/>
+        <TextName Value="CaIS.MV2-Studio"/>
+        <TextDesc Value="Code editor for MV2/MV1/RSM M systems."/>
       </XPManifest>
       <Icon Value="0"/>
     </General>
     <VersionInfo>
       <UseVersionInfo Value="True"/>
-      <AutoIncrementBuild Value="True"/>
       <MajorVersionNr Value="1"/>
       <MinorVersionNr Value="8"/>
       <BuildNr Value="9"/>
