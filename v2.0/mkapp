@@ -1,6 +1,6 @@
 bundle=MV2_Studio
 app=$bundle.app
-tgtapp=$bundle-v1.app
+tgtapp=$bundle-v2.app
 toc=$app/Contents
 res=$toc/Resources
 
@@ -8,7 +8,7 @@ strip -x -S $bundle
 upx $bundle
 
 cp Info.plist $toc
-cp $bundle.icns $res
+cp ../$bundle.icns $res
 cp MStudio.RTN $res
 
 rm -rf $HOME/Applications/$tgtapp
