@@ -242,11 +242,12 @@ begin
 end;
 
 procedure TStudioForm.SYNBtnClick(Sender: TObject);
-var ANS,enc,UCIDB,srctx,mode:String;
+var ANS,enc,UCIDB,srctx,mode,rtnn:String;
     ix,ixsrc,MX:Integer;
     prb:Real;
 begin
-  if PC(GENlb.Caption,';',2)='1' then BCKFile(IntToStr(SRCActive)+'_'+RTNName.Text+'_Save.bck');
+  rtnn:=TR(RTNName.Text,'*','');
+  if PC(GENlb.Caption,';',2)='1' then BCKFile(IntToStr(SRCActive)+'_'+rtnn+'_Save.bck');
   if HOSTUCI.Text='' then MessageDlg('HOST_DB or HOST_UCI not selected! ' ,mtError, mbOKCancel, 0);
   if HOSTUCI.Text='' then Abort;
   UCIDB:=TR(HOSTUCI.Text,'"','~');
@@ -259,7 +260,7 @@ begin
    { Save Routine Source lines... }
    MX:=CodeEditor.Lines.Count;     { 0..MX-1}
    SCPBar.Position:=1;
-   RTNName.Text:=TR(RTNName.Text,'*','');
+   RTNName.Text:=rtnn;
    { First line prepare... }
     mode:=PC(GENlb.caption,';',1);
     if mode='1' then begin
@@ -274,7 +275,7 @@ begin
     srctx:=TR(srctx,'"',chr(96));
     srctx:=TR(srctx,'|',chr(127));
     //SAVE^%MStudio(mode,ucidb,rtn,seq,srctx)
-    ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$SAVE^%MStudio("'+UCIDB+'","'+RTNName.Text+'",'+IntToStr(ixsrc)+',"'+srctx+'")');
+    ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$SAVE^%MStudio("'+UCIDB+'","'+rtnn+'",'+IntToStr(ixsrc)+',"'+srctx+'")');
     prb:=ix/MX*100;
     SCPBar.Position:=Round(prb);
    end; { for CodeEditor.Line[ix].. }
@@ -282,13 +283,13 @@ begin
    SRCPanels[SRCActive].mf:=''; RfrSRCPanels(Self);
    RTNLines.Caption:=IntToStr(MX);
    { ReCompile }
-   ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$COMP^%MStudio("'+UCIDB+'","'+RTNName.Text+'")');
+   ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$COMP^%MStudio("'+UCIDB+'","'+rtnn+'")');
    { Syntax Check & Report error's to Compiler Output }
-   ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$SYNCH^%MStudio("'+UCIDB+'","'+RTNName.Text+'")');
-   if ANS='OK' then MessageDlg('Routine: '+RTNName.Text+' saved & compiled done [No errors].' ,mtInformation, mbOKCancel, 0)
+   ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$SYNCH^%MStudio("'+UCIDB+'","'+rtnn+'")');
+   if ANS='OK' then MessageDlg('Routine: '+rtnn+' saved & compiled done [No errors].' ,mtInformation, mbOKCancel, 0)
    else begin
     SYNCHForm.SYNERR.Lines.Clear;
-    SYNCHForm.Caption:='Routine: '+RTNName.Text+'     syntax errors:';
+    SYNCHForm.Caption:='Routine: '+rtnn+'     syntax errors:';
     MX:=StrToInt(PC(ANS,':',2));
     for ix:=1 to MX do begin
      ANS:=TCPSR('CALL|'+MJOB.Text+'|MGR|$$MTI^%MStudio('+IntToStr(ix)+')');
@@ -529,9 +530,10 @@ end;
  procedure TStudioForm.BCKFile(fnm:String);
  var ix,MX:Integer;
      dirs:String='';
-     opt:String;
+     opt,rtnn:String;
      BckF:TextFile;
  begin
+  rtnn := TR(RTNName.Text,'*','');
   { Save BACKUP File : }
   {$IFDEF WINDOWS}
    GetDir(0,dirs);
@@ -547,7 +549,7 @@ end;
   AssignFile(BckF, dirs + DirectorySeparator + fnm);
   Rewrite(BckF);
   { Write HEAD INFORMATION }
-  Writeln(BckF, '['+IntToStr(SRCActive)+']'+RTNName.Text+' {Automatic Save : '+opt+'}');
+  Writeln(BckF, '['+IntToStr(SRCActive)+']'+rtnn+' {Automatic Save : '+opt+'}');
   Writeln(BckF, '-------------------------------------------------------------------------------');
   { Write CodeEditor lines .... }
   MX:=CodeEditor.Lines.Count;

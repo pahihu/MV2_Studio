@@ -2367,7 +2367,7 @@ object StudioForm: TStudioForm
   end
   object RTNName: TEdit
     Left = 922
-    Height = 21
+    Height = 25
     Top = 6
     Width = 138
     Font.CharSet = EASTEUROPE_CHARSET
@@ -2390,7 +2390,7 @@ object StudioForm: TStudioForm
   end
   object HOSTIP: TEdit
     Left = 600
-    Height = 22
+    Height = 23
     Top = 5
     Width = 154
     Alignment = taCenter
@@ -2401,7 +2401,7 @@ object StudioForm: TStudioForm
   end
   object HOSTPort: TEdit
     Left = 796
-    Height = 22
+    Height = 23
     Top = 6
     Width = 51
     Alignment = taCenter
@@ -2412,7 +2412,7 @@ object StudioForm: TStudioForm
   end
   object HOSTUCI: TEdit
     Left = 602
-    Height = 22
+    Height = 23
     Top = 32
     Width = 198
     Alignment = taCenter
@@ -2423,9 +2423,9 @@ object StudioForm: TStudioForm
   end
   object Label2: TLabel
     Left = 412
-    Height = 17
+    Height = 19
     Top = -1
-    Width = 105
+    Width = 100
     Caption = 'HOST Environ.:'
     Font.CharSet = EASTEUROPE_CHARSET
     Font.Color = clAqua
@@ -2438,9 +2438,9 @@ object StudioForm: TStudioForm
   end
   object Label3: TLabel
     Left = 761
-    Height = 17
+    Height = 19
     Top = 9
-    Width = 34
+    Width = 33
     Caption = 'Port:'
     Font.CharSet = EASTEUROPE_CHARSET
     Font.Height = -14
@@ -2452,9 +2452,9 @@ object StudioForm: TStudioForm
   end
   object Label4: TLabel
     Left = 537
-    Height = 17
+    Height = 19
     Top = 9
-    Width = 64
+    Width = 61
     Caption = 'HOST_IP:'
     Font.CharSet = EASTEUROPE_CHARSET
     Font.Height = -14
@@ -2497,9 +2497,9 @@ object StudioForm: TStudioForm
   end
   object Label5: TLabel
     Left = 859
-    Height = 17
+    Height = 19
     Top = 8
-    Width = 23
+    Width = 18
     Caption = '$J:'
     Font.CharSet = EASTEUROPE_CHARSET
     Font.Height = -14
@@ -2511,7 +2511,7 @@ object StudioForm: TStudioForm
   end
   object MJOB: TEdit
     Left = 883
-    Height = 21
+    Height = 25
     Top = 6
     Width = 32
     Alignment = taCenter
@@ -2707,9 +2707,9 @@ object StudioForm: TStudioForm
   end
   object Label6: TLabel
     Left = 514
-    Height = 17
+    Height = 19
     Top = 33
-    Width = 88
+    Width = 83
     Caption = 'UCI,DB_VOL:'
     Font.CharSet = EASTEUROPE_CHARSET
     Font.Height = -14
@@ -2721,7 +2721,7 @@ object StudioForm: TStudioForm
   end
   object HOSTENV: TEdit
     Left = 412
-    Height = 19
+    Height = 20
     Top = 16
     Width = 97
     Alignment = taCenter
@@ -5213,7 +5213,7 @@ object StudioForm: TStudioForm
   end
   object HOSTENC: TEdit
     Left = 412
-    Height = 17
+    Height = 19
     Top = 34
     Width = 97
     Color = clMoneyGreen
@@ -5233,7 +5233,7 @@ object StudioForm: TStudioForm
     Left = 1090
     Height = 12
     Top = 15
-    Width = 7
+    Width = 6
     Alignment = taRightJustify
     Caption = '0'
     Font.CharSet = EASTEUROPE_CHARSET
@@ -5249,7 +5249,7 @@ object StudioForm: TStudioForm
     Left = 1066
     Height = 12
     Top = 2
-    Width = 31
+    Width = 27
     Alignment = taRightJustify
     Caption = 'lines :'
     Font.CharSet = EASTEUROPE_CHARSET
@@ -5263,9 +5263,9 @@ object StudioForm: TStudioForm
   end
   object GENlb: TLabel
     Left = 11
-    Height = 16
+    Height = 15
     Top = 38
-    Width = 38
+    Width = 33
     Caption = 'GENlb'
     Enabled = False
     ParentColor = False
